@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aws/karpenter-core/pkg/apis/v1alpha5"
 	kaitov1alpha1 "github.com/azure/kaito/api/v1alpha1"
 	"github.com/azure/kaito/test/e2e/utils"
 	. "github.com/onsi/ginkgo/v2"
@@ -23,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"knative.dev/pkg/apis"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 const (
@@ -105,18 +105,18 @@ func createAndValidateWorkspace(workspaceObj *kaitov1alpha1.Workspace) {
 	})
 }
 
-func getAllValidMachines(workspaceObj *kaitov1alpha1.Workspace) (*v1alpha5.MachineList, error) {
-	machineList := &v1alpha5.MachineList{}
+func getAllValidMachines(workspaceObj *kaitov1alpha1.Workspace) (*v1beta1.NodeClaimList, error) {
+	nodeclaimList := &v1beta1.NodeClaimList{}
 	ls := labels.Set{
 		kaitov1alpha1.LabelWorkspaceName:      workspaceObj.Name,
 		kaitov1alpha1.LabelWorkspaceNamespace: workspaceObj.Namespace,
 	}
 
-	err := TestingCluster.KubeClient.List(ctx, machineList, &client.MatchingLabelsSelector{Selector: ls.AsSelector()})
+	err := TestingCluster.KubeClient.List(ctx, nodeclaimList, &client.MatchingLabelsSelector{Selector: ls.AsSelector()})
 	if err != nil {
 		return nil, err
 	}
-	return machineList, nil
+	return nodeclaimList, nil
 }
 
 // Logic to validate machine creation

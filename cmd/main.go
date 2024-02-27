@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aws/karpenter-core/pkg/apis/v1alpha5"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"github.com/azure/kaito/pkg/controllers"
 	"github.com/azure/kaito/pkg/webhooks"
 	"k8s.io/klog/v2"
@@ -50,7 +50,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(kaitov1alpha1.AddToScheme(scheme))
-	utilruntime.Must(v1alpha5.SchemeBuilder.AddToScheme(scheme))
+	utilruntime.Must(v1beta1.SchemeBuilder.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 }
@@ -77,7 +77,6 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "ef60f9b0.io",

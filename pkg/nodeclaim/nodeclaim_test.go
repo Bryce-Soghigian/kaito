@@ -1,13 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
-package machine
+package nodeclaim
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/aws/karpenter-core/pkg/apis/v1alpha5"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"github.com/azure/kaito/pkg/utils"
 	"github.com/stretchr/testify/mock"
 	"gotest.tools/assert"
@@ -17,26 +17,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestCreateMachine(t *testing.T) {
+func TestCreateNodeClaim(t *testing.T) {
 	testcases := map[string]struct {
 		callMocks         func(c *utils.MockClient)
 		machineConditions apis.Conditions
 		expectedError     error
 	}{
-		"Machine creation fails": {
+		"NodeClaim creation fails": {
 			callMocks: func(c *utils.MockClient) {
-				c.On("Create", mock.IsType(context.Background()), mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(errors.New("Failed to create machine"))
+				c.On("Create", mock.IsType(context.Background()), mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(errors.New("Failed to create machine"))
 			},
 			expectedError: errors.New("Failed to create machine"),
 		},
-		"Machine creation fails because SKU is not available": {
+		"NodeClaim creation fails because SKU is not available": {
 			callMocks: func(c *utils.MockClient) {
-				c.On("Create", mock.IsType(context.Background()), mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(nil)
-				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(nil)
+				c.On("Create", mock.IsType(context.Background()), mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(nil)
+				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(nil)
 			},
 			machineConditions: apis.Conditions{
 				{
-					Type:    v1alpha5.MachineLaunched,
+					Type:    v1beta1.Launched,
 					Status:  corev1.ConditionFalse,
 					Message: ErrorInstanceTypesUnavailable,
 				},
@@ -45,8 +45,8 @@ func TestCreateMachine(t *testing.T) {
 		},
 		"A machine is successfully created": {
 			callMocks: func(c *utils.MockClient) {
-				c.On("Create", mock.IsType(context.Background()), mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(nil)
-				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(nil)
+				c.On("Create", mock.IsType(context.Background()), mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(nil)
+				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(nil)
 			},
 			machineConditions: apis.Conditions{
 				{
@@ -63,10 +63,10 @@ func TestCreateMachine(t *testing.T) {
 			mockClient := utils.NewClient()
 			tc.callMocks(mockClient)
 
-			mockMachine := &utils.MockMachine
-			mockMachine.Status.Conditions = tc.machineConditions
+			mockNodeClaim := &utils.MockNodeClaim
+			mockNodeClaim.Status.Conditions = tc.machineConditions
 
-			err := CreateMachine(context.Background(), mockMachine, mockClient)
+			err := CreateNodeClaim(context.Background(), mockNodeClaim, mockClient)
 			if tc.expectedError == nil {
 				assert.Check(t, err == nil, "Not expected to return error")
 			} else {
@@ -76,7 +76,7 @@ func TestCreateMachine(t *testing.T) {
 	}
 }
 
-func TestWaitForPendingMachines(t *testing.T) {
+func TestWaitForPendingNodeClaims(t *testing.T) {
 	testcases := map[string]struct {
 		callMocks         func(c *utils.MockClient)
 		machineConditions apis.Conditions
@@ -84,30 +84,30 @@ func TestWaitForPendingMachines(t *testing.T) {
 	}{
 		"Fail to list machines because associated machines cannot be retrieved": {
 			callMocks: func(c *utils.MockClient) {
-				c.On("List", mock.IsType(context.Background()), mock.IsType(&v1alpha5.MachineList{}), mock.Anything).Return(errors.New("Failed to retrieve machines"))
+				c.On("List", mock.IsType(context.Background()), mock.IsType(&v1beta1.NodeClaimList{}), mock.Anything).Return(errors.New("Failed to retrieve machines"))
 			},
 			expectedError: errors.New("Failed to retrieve machines"),
 		},
 		"Fail to list machines because machine status cannot be retrieved": {
 			callMocks: func(c *utils.MockClient) {
-				machineList := utils.MockMachineList
+				machineList := utils.MockNodeClaimList
 				relevantMap := c.CreateMapWithType(machineList)
-				c.CreateOrUpdateObjectInMap(&utils.MockMachine)
+				c.CreateOrUpdateObjectInMap(&utils.MockNodeClaim)
 
 				//insert machine objects into the map
-				for _, obj := range utils.MockMachineList.Items {
+				for _, obj := range utils.MockNodeClaimList.Items {
 					m := obj
 					objKey := client.ObjectKeyFromObject(&m)
 
 					relevantMap[objKey] = &m
 				}
 
-				c.On("List", mock.IsType(context.Background()), mock.IsType(&v1alpha5.MachineList{}), mock.Anything).Return(nil)
-				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(errors.New("Fail to get machine"))
+				c.On("List", mock.IsType(context.Background()), mock.IsType(&v1beta1.NodeClaimList{}), mock.Anything).Return(nil)
+				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(errors.New("Fail to get machine"))
 			},
 			machineConditions: apis.Conditions{
 				{
-					Type:   v1alpha5.MachineInitialized,
+					Type:   v1beta1.Initialized,
 					Status: corev1.ConditionFalse,
 				},
 			},
@@ -115,20 +115,20 @@ func TestWaitForPendingMachines(t *testing.T) {
 		},
 		"Successfully waits for all pending machines": {
 			callMocks: func(c *utils.MockClient) {
-				machineList := utils.MockMachineList
+				machineList := utils.MockNodeClaimList
 				relevantMap := c.CreateMapWithType(machineList)
-				c.CreateOrUpdateObjectInMap(&utils.MockMachine)
+				c.CreateOrUpdateObjectInMap(&utils.MockNodeClaim)
 
 				//insert machine objects into the map
-				for _, obj := range utils.MockMachineList.Items {
+				for _, obj := range utils.MockNodeClaimList.Items {
 					m := obj
 					objKey := client.ObjectKeyFromObject(&m)
 
 					relevantMap[objKey] = &m
 				}
 
-				c.On("List", mock.IsType(context.Background()), mock.IsType(&v1alpha5.MachineList{}), mock.Anything).Return(nil)
-				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1alpha5.Machine{}), mock.Anything).Return(nil)
+				c.On("List", mock.IsType(context.Background()), mock.IsType(&v1beta1.NodeClaimList{}), mock.Anything).Return(nil)
+				c.On("Get", mock.IsType(context.Background()), mock.Anything, mock.IsType(&v1beta1.NodeClaim{}), mock.Anything).Return(nil)
 			},
 			machineConditions: apis.Conditions{
 				{
@@ -145,15 +145,15 @@ func TestWaitForPendingMachines(t *testing.T) {
 			mockClient := utils.NewClient()
 			tc.callMocks(mockClient)
 
-			mockMachine := &v1alpha5.Machine{}
+			mockNodeClaim := &v1beta1.NodeClaim{}
 
 			mockClient.UpdateCb = func(key types.NamespacedName) {
-				mockClient.GetObjectFromMap(mockMachine, key)
-				mockMachine.Status.Conditions = tc.machineConditions
-				mockClient.CreateOrUpdateObjectInMap(mockMachine)
+				mockClient.GetObjectFromMap(mockNodeClaim, key)
+				mockNodeClaim.Status.Conditions = tc.machineConditions
+				mockClient.CreateOrUpdateObjectInMap(mockNodeClaim)
 			}
 
-			err := WaitForPendingMachines(context.Background(), utils.MockWorkspaceWithPreset, mockClient)
+			err := WaitForPendingNodeClaims(context.Background(), utils.MockWorkspaceWithPreset, mockClient)
 			if tc.expectedError == nil {
 				assert.Check(t, err == nil, "Not expected to return error")
 			} else {
@@ -163,13 +163,13 @@ func TestWaitForPendingMachines(t *testing.T) {
 	}
 }
 
-func TestGenerateMachineManifiest(t *testing.T) {
+func TestGenerateNodeClaimManifiest(t *testing.T) {
 	t.Run("Should generate a machine object from the given workspace", func(t *testing.T) {
 		mockWorkspace := utils.MockWorkspaceWithPreset
 
-		machine := GenerateMachineManifest(context.Background(), "0", mockWorkspace)
+		machine := GenerateNodeClaimManifest(context.Background(), "0", mockWorkspace)
 
-		assert.Check(t, machine != nil, "Machine must not be nil")
-		assert.Equal(t, machine.Namespace, mockWorkspace.Namespace, "Machine must have same namespace as workspace")
+		assert.Check(t, machine != nil, "NodeClaim must not be nil")
+		assert.Equal(t, machine.Namespace, mockWorkspace.Namespace, "NodeClaim must have same namespace as workspace")
 	})
 }

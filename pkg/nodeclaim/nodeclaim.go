@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
-package machine
+package nodeclaim
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/karpenter-core/pkg/apis/v1alpha5"
 	kaitov1alpha1 "github.com/azure/kaito/api/v1alpha1"
 	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
@@ -21,12 +20,13 @@ import (
 	"k8s.io/utils/clock"
 	"knative.dev/pkg/apis"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 const (
 	ProvisionerName               = "default"
 	LabelGPUProvisionerCustom     = "kaito.sh/machine-type"
-	LabelProvisionerName          = "karpenter.sh/provisioner-name"
+	LabelProvisionerName          = "karpenter.sh/nodepool-name"
 	GPUString                     = "gpu"
 	ErrorInstanceTypesUnavailable = "all requested instance types were unavailable during launch"
 )
@@ -36,8 +36,8 @@ var (
 	machineStatusTimeoutInterval = 240 * time.Second
 )
 
-// GenerateMachineManifest generates a machine object from the given workspace.
-func GenerateMachineManifest(ctx context.Context, storageRequirement string, workspaceObj *kaitov1alpha1.Workspace) *v1alpha5.Machine {
+// GenerateNodeClaimManifest generates a machine object from the given workspace.
+func GenerateNodeClaimManifest(ctx context.Context, storageRequirement string, workspaceObj *kaitov1alpha1.Workspace) *v1beta1.NodeClaim {
 	digest := sha256.Sum256([]byte(workspaceObj.Namespace + workspaceObj.Name + time.Now().Format("2006-01-02 15:04:05.000000000"))) // We make sure the machine name is not fixed to the a workspace
 	machineName := "ws" + hex.EncodeToString(digest[0:])[0:9]
 	machineLabels := map[string]string{
@@ -51,16 +51,13 @@ func GenerateMachineManifest(ctx context.Context, storageRequirement string, wor
 
 	}
 
-	return &v1alpha5.Machine{
+	return &v1beta1.NodeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineName,
 			Namespace: workspaceObj.Namespace,
 			Labels:    machineLabels,
 		},
-		Spec: v1alpha5.MachineSpec{
-			MachineTemplateRef: &v1alpha5.MachineTemplateRef{
-				Name: machineName,
-			},
+		Spec: v1beta1.NodeClaimSpec{
 			Requirements: []v1.NodeSelectorRequirement{
 				{
 					Key:      v1.LabelInstanceTypeStable,
@@ -95,7 +92,7 @@ func GenerateMachineManifest(ctx context.Context, storageRequirement string, wor
 					Effect: v1.TaintEffectNoSchedule,
 				},
 			},
-			Resources: v1alpha5.ResourceRequirements{
+			Resources: v1beta1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: resource.MustParse(storageRequirement),
 				},
@@ -104,9 +101,9 @@ func GenerateMachineManifest(ctx context.Context, storageRequirement string, wor
 	}
 }
 
-// CreateMachine creates a machine object.
-func CreateMachine(ctx context.Context, machineObj *v1alpha5.Machine, kubeClient client.Client) error {
-	klog.InfoS("CreateMachine", "machine", klog.KObj(machineObj))
+// CreateNodeClaim creates a machine object.
+func CreateNodeClaim(ctx context.Context, machineObj *v1beta1.NodeClaim, kubeClient client.Client) error {
+	klog.InfoS("CreateNodeClaim", "machine", klog.KObj(machineObj))
 	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
 		return err.Error() != ErrorInstanceTypesUnavailable
 	}, func() error {
@@ -116,12 +113,12 @@ func CreateMachine(ctx context.Context, machineObj *v1alpha5.Machine, kubeClient
 		}
 		time.Sleep(1 * time.Second)
 
-		updatedObj := &v1alpha5.Machine{}
+		updatedObj := &v1beta1.NodeClaim{}
 		err = kubeClient.Get(ctx, client.ObjectKey{Name: machineObj.Name, Namespace: machineObj.Namespace}, updatedObj, &client.GetOptions{})
 
 		// if SKU is not available, then exit.
 		_, conditionFound := lo.Find(updatedObj.GetConditions(), func(condition apis.Condition) bool {
-			return condition.Type == v1alpha5.MachineLaunched &&
+			return condition.Type == v1beta1.Launched &&
 				condition.Status == v1.ConditionFalse && condition.Message == ErrorInstanceTypesUnavailable
 		})
 		if conditionFound {
@@ -132,9 +129,9 @@ func CreateMachine(ctx context.Context, machineObj *v1alpha5.Machine, kubeClient
 	})
 }
 
-// WaitForPendingMachines checks if the there are any machines in provisioning condition. If so, wait until they are ready.
-func WaitForPendingMachines(ctx context.Context, workspaceObj *kaitov1alpha1.Workspace, kubeClient client.Client) error {
-	machines, err := ListMachinesByWorkspace(ctx, workspaceObj, kubeClient)
+// WaitForPendingNodeClaims checks if the there are any machines in provisioning condition. If so, wait until they are ready.
+func WaitForPendingNodeClaims(ctx context.Context, workspaceObj *kaitov1alpha1.Workspace, kubeClient client.Client) error {
+	machines, err := ListNodeClaimsByWorkspace(ctx, workspaceObj, kubeClient)
 	if err != nil {
 		return err
 	}
@@ -148,12 +145,12 @@ func WaitForPendingMachines(ctx context.Context, workspaceObj *kaitov1alpha1.Wor
 		})
 		if machineInstanceType {
 			_, found := lo.Find(machines.Items[i].GetConditions(), func(condition apis.Condition) bool {
-				return condition.Type == v1alpha5.MachineInitialized && condition.Status == v1.ConditionFalse
+				return condition.Type == v1beta1.Initialized && condition.Status == v1.ConditionFalse
 			})
 
 			if found || machines.Items[i].GetConditions() == nil { // checking conditions==nil is a workaround for conditions delaying to set on the machine object.
 				//wait until machine is initialized.
-				if err := CheckMachineStatus(ctx, &machines.Items[i], kubeClient); err != nil {
+				if err := CheckNodeClaimStatus(ctx, &machines.Items[i], kubeClient); err != nil {
 					return err
 				}
 			}
@@ -162,9 +159,9 @@ func WaitForPendingMachines(ctx context.Context, workspaceObj *kaitov1alpha1.Wor
 	return nil
 }
 
-// ListMachines list all machine objects in the cluster that are created by the workspace identified by the label.
-func ListMachinesByWorkspace(ctx context.Context, workspaceObj *kaitov1alpha1.Workspace, kubeClient client.Client) (*v1alpha5.MachineList, error) {
-	machineList := &v1alpha5.MachineList{}
+// ListNodeClaims list all machine objects in the cluster that are created by the workspace identified by the label.
+func ListNodeClaimsByWorkspace(ctx context.Context, workspaceObj *kaitov1alpha1.Workspace, kubeClient client.Client) (*v1beta1.NodeClaimList, error) {
+	machineList := &v1beta1.NodeClaimList{}
 
 	ls := labels.Set{
 		kaitov1alpha1.LabelWorkspaceName:      workspaceObj.Name,
@@ -183,11 +180,11 @@ func ListMachinesByWorkspace(ctx context.Context, workspaceObj *kaitov1alpha1.Wo
 	return machineList, nil
 }
 
-// CheckMachineStatus checks the status of the machine. If the machine is not ready, then it will wait for the machine to be ready.
+// CheckNodeClaimStatus checks the status of the machine. If the machine is not ready, then it will wait for the machine to be ready.
 // If the machine is not ready after the timeout, then it will return an error.
 // if the machine is ready, then it will return nil.
-func CheckMachineStatus(ctx context.Context, machineObj *v1alpha5.Machine, kubeClient client.Client) error {
-	klog.InfoS("CheckMachineStatus", "machine", klog.KObj(machineObj))
+func CheckNodeClaimStatus(ctx context.Context, machineObj *v1beta1.NodeClaim, kubeClient client.Client) error {
+	klog.InfoS("CheckNodeClaimStatus", "machine", klog.KObj(machineObj))
 	timeClock := clock.RealClock{}
 	tick := timeClock.NewTicker(machineStatusTimeoutInterval)
 	defer tick.Stop()

@@ -12,10 +12,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/clock"
 
-	"github.com/aws/karpenter-core/pkg/apis/v1alpha5"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	kaitov1alpha1 "github.com/azure/kaito/api/v1alpha1"
 	"github.com/azure/kaito/pkg/inference"
-	"github.com/azure/kaito/pkg/machine"
+	"github.com/azure/kaito/pkg/nodeclaim"
 	"github.com/azure/kaito/pkg/resources"
 	"github.com/azure/kaito/pkg/utils"
 	"github.com/azure/kaito/pkg/utils/plugin"
@@ -94,7 +94,7 @@ func (c *WorkspaceReconciler) addOrUpdateWorkspace(ctx context.Context, wObj *ka
 			return reconcile.Result{}, updateErr
 		}
 		// if error is	due to machine instance types unavailability, stop reconcile.
-		if err.Error() == machine.ErrorInstanceTypesUnavailable {
+		if err.Error() == nodeclaim.ErrorInstanceTypesUnavailable {
 			return reconcile.Result{Requeue: false}, err
 		}
 		return reconcile.Result{}, err
@@ -185,7 +185,7 @@ func selectWorkspaceNodes(qualified []*corev1.Node, preferred []string, previous
 func (c *WorkspaceReconciler) applyWorkspaceResource(ctx context.Context, wObj *kaitov1alpha1.Workspace) error {
 
 	// Wait for pending machines if any before we decide whether to create new machine or not.
-	if err := machine.WaitForPendingMachines(ctx, wObj, c.Client); err != nil {
+	if err := nodeclaim.WaitForPendingNodeClaims(ctx, wObj, c.Client); err != nil {
 		return err
 	}
 
@@ -312,9 +312,9 @@ func (c *WorkspaceReconciler) createAndValidateNode(ctx context.Context, wObj *k
 	}
 
 Retry_withdifferentname:
-	newMachine := machine.GenerateMachineManifest(ctx, machineOSDiskSize, wObj)
+	newMachine := nodeclaim.GenerateNodeClaimManifest(ctx, machineOSDiskSize, wObj)
 
-	if err := machine.CreateMachine(ctx, newMachine, c.Client); err != nil {
+	if err := nodeclaim.CreateNodeClaim(ctx, newMachine, c.Client); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			klog.InfoS("There exists a machine with the same name, retry with a different name", "machine", klog.KObj(newMachine))
 			goto Retry_withdifferentname
@@ -331,7 +331,7 @@ Retry_withdifferentname:
 	}
 
 	// check machine status until it is ready
-	err := machine.CheckMachineStatus(ctx, newMachine, c.Client)
+	err := nodeclaim.CheckNodeClaimStatus(ctx, newMachine, c.Client)
 	if err != nil {
 		if updateErr := c.updateStatusConditionIfNotMatch(ctx, wObj, kaitov1alpha1.WorkspaceConditionTypeMachineStatus, metav1.ConditionFalse,
 			"checkMachineStatusFailed", err.Error()); updateErr != nil {
@@ -500,7 +500,7 @@ func (c *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&kaitov1alpha1.Workspace{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
-		Watches(&v1alpha5.Machine{}, c.watchMachines()).
+		Watches(&v1beta1.NodeClaim{}, c.watchMachines()).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		Complete(c)
 }
@@ -509,7 +509,7 @@ func (c *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (c *WorkspaceReconciler) watchMachines() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(
 		func(ctx context.Context, o client.Object) []reconcile.Request {
-			machineObj := o.(*v1alpha5.Machine)
+			machineObj := o.(*v1beta1.NodeClaim)
 			name, ok := machineObj.Labels[kaitov1alpha1.LabelWorkspaceName]
 			if !ok {
 				return nil

@@ -4,7 +4,6 @@
 package utils
 
 import (
-	"github.com/aws/karpenter-core/pkg/apis/v1alpha5"
 	"github.com/azure/kaito/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 const (
@@ -155,15 +155,12 @@ var (
 )
 
 var (
-	MockMachine = v1alpha5.Machine{
+	MockNodeClaim = v1beta1.NodeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "testmachine",
 			Labels: machineLabels,
 		},
-		Spec: v1alpha5.MachineSpec{
-			MachineTemplateRef: &v1alpha5.MachineTemplateRef{
-				Name: "test-machine",
-			},
+		Spec: v1beta1.NodeClaimSpec{
 			Requirements: []corev1.NodeSelectorRequirement{
 				{
 					Key:      corev1.LabelInstanceTypeStable,
@@ -181,9 +178,9 @@ var (
 )
 
 var (
-	MockMachineList = &v1alpha5.MachineList{
-		Items: []v1alpha5.Machine{
-			MockMachine,
+	MockNodeClaimList = &v1beta1.NodeClaimList{
+		Items: []v1beta1.NodeClaim{
+			MockNodeClaim,
 		},
 	}
 )
