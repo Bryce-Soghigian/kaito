@@ -12,7 +12,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/clock"
 
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	kaitov1alpha1 "github.com/azure/kaito/api/v1alpha1"
 	"github.com/azure/kaito/pkg/inference"
 	"github.com/azure/kaito/pkg/nodeclaim"
@@ -34,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 const (
@@ -500,13 +500,13 @@ func (c *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&kaitov1alpha1.Workspace{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
-		Watches(&v1beta1.NodeClaim{}, c.watchMachines()).
+		Watches(&v1beta1.NodeClaim{}, c.watchNodeclaims()).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		Complete(c)
 }
 
-// watches for machine with labels indicating workspace name.
-func (c *WorkspaceReconciler) watchMachines() handler.EventHandler {
+// watches for nodeclaim with labels indicating workspace name.
+func (c *WorkspaceReconciler) watchNodeclaims() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(
 		func(ctx context.Context, o client.Object) []reconcile.Request {
 			machineObj := o.(*v1beta1.NodeClaim)

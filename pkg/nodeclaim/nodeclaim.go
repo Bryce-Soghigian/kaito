@@ -99,6 +99,7 @@ func GenerateNodeClaimManifest(ctx context.Context, storageRequirement string, w
 			},
 		},
 	}
+
 }
 
 // CreateNodeClaim creates a machine object.

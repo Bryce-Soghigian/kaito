@@ -7,7 +7,6 @@ import (
 	"errors"
 	"testing"
 
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"github.com/azure/kaito/pkg/utils"
 	"github.com/stretchr/testify/mock"
 	"gotest.tools/assert"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"knative.dev/pkg/apis"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 func TestCreateNodeClaim(t *testing.T) {

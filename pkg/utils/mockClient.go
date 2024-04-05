@@ -7,7 +7,6 @@ import (
 	"context"
 	"reflect"
 
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	k8sClient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 // Client is a mock for the controller-runtime dynamic client interface.

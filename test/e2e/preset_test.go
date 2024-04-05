@@ -316,16 +316,16 @@ var _ = Describe("Workspace Preset", func() {
 			fmt.Print("Error: RUN_LLAMA_13B ENV Variable not set")
 			runLlama13B = false
 		}
-	
+
 		aiModelsRegistry = utils.GetEnv("AI_MODELS_REGISTRY")
-		
+
 		// Load stable model versions
 		configs, err := utils.GetModelConfigInfo("/home/runner/work/kaito/kaito/presets/models/supported_models.yaml")
 		if err != nil {
 			fmt.Printf("Failed to load model configs: %v\n", err)
 			os.Exit(1)
 		}
-	
+
 		modelInfo, err = utils.ExtractModelVersion(configs)
 		if err != nil {
 			fmt.Printf("Failed to extract stable model versions: %v\n", err)
